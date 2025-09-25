@@ -1,23 +1,19 @@
 import streamlit as st
 
 # A dictionary to store tax rates and bands for different tax years.
-# This makes it easy to update for new tax years.
 tax_data = {
     "2025-2026": {
         "personal_allowance": 12570,
         "allowance_threshold": 100000,
         "tax_bands": [
-            (15397, 0.19),  # Starter rate: £12,571 - £15,397
-            (27491, 0.20),  # Basic rate: £15,398 - £27,491
-            (43662, 0.21),  # Intermediate rate: £27,492 - £43,662
-            (75000, 0.42),  # Higher rate: £43,663 - £75,000
-            (125140, 0.45) # Advanced rate: £75,001 - £125,140
+            (15397, 0.19),  # Starter rate
+            (27491, 0.20),  # Basic rate
+            (43662, 0.21),  # Intermediate rate
+            (75000, 0.42),  # Higher rate
+            (125140, 0.45) # Advanced rate
         ],
         "top_rate": 0.48,
     }
-    # Add new tax years here as they are announced
-    # Example:
-    # "2026-2027": { ... }
 }
 
 def calculate_scottish_tax(salary, tax_year_data):
@@ -37,49 +33,41 @@ def calculate_scottish_tax(salary, tax_year_data):
     tax_bands = tax_year_data["tax_bands"]
     top_rate = tax_year_data["top_rate"]
 
-    # Calculate the personal allowance.
+    # Calculate the effective personal allowance.
+    effective_personal_allowance = personal_allowance
     if salary > 125140:
-        personal_allowance = 0
+        effective_personal_allowance = 0
     elif salary > allowance_threshold:
-        personal_allowance = personal_allowance - ((salary - allowance_threshold) / 2)
+        effective_personal_allowance = personal_allowance - ((salary - allowance_threshold) / 2)
     
-    taxable_income = salary - personal_allowance
+    taxable_income = max(0, salary - effective_personal_allowance)
     total_tax = 0.0
     tax_breakdown = {}
     
-    # Correctly initialize the previous band limit to the personal allowance
-    previous_band_limit = personal_allowance
+    # Correctly handle the progressive tax bands
+    previous_band_limit = 0
     
-    # The first band's lower limit is the personal allowance
-    first_tax_band_limit = tax_bands[0][0]
-    first_tax_rate = tax_bands[0][1]
-    
-    if taxable_income > 0:
-        taxable_in_first_band = min(taxable_income, first_tax_band_limit - personal_allowance)
-        tax_for_first_band = taxable_in_first_band * first_tax_rate
-        total_tax += tax_for_first_band
-        tax_breakdown[f"£{personal_allowance + 1:,} - £{first_tax_band_limit:,}"] = f"£{taxable_in_first_band:,.2f} @ {int(first_tax_rate*100)}% = £{tax_for_first_band:,.2f}"
-
-    # Calculate tax for the remaining bands
-    previous_band_limit = first_tax_band_limit
-    
-    for band_limit, rate in tax_bands[1:]:
-        if taxable_income > previous_band_limit - personal_allowance:
-            # The amount of income in the current band
-            taxable_in_band = min(taxable_income, band_limit - personal_allowance) - (previous_band_limit - personal_allowance)
-            tax_for_band = taxable_in_band * rate
+    for band_limit, rate in tax_bands:
+        if taxable_income > previous_band_limit:
+            # The amount of income in the current band is the minimum of
+            # the remaining taxable income or the width of the band.
+            band_width = band_limit - previous_band_limit
+            taxable_in_band = min(taxable_income - previous_band_limit, band_width)
+            
+            tax_for_band = round(taxable_in_band * rate, 2)
             total_tax += tax_for_band
-            tax_breakdown[f"£{previous_band_limit+1:,} - £{band_limit:,}"] = f"£{taxable_in_band:,.2f} @ {int(rate*100)}% = £{tax_for_band:,.2f}"
+            tax_breakdown[f"£{previous_band_limit + effective_personal_allowance + 1:,} - £{band_limit + effective_personal_allowance:,}"] = f"£{taxable_in_band:,.2f} @ {int(rate*100)}% = £{tax_for_band:,.2f}"
+            
             previous_band_limit = band_limit
         else:
             break
 
     # Calculate tax for the top rate band
-    if taxable_income > previous_band_limit - personal_allowance:
-        taxable_in_top_band = taxable_income - (previous_band_limit - personal_allowance)
-        tax_for_top_band = taxable_in_top_band * top_rate
+    if taxable_income > previous_band_limit:
+        taxable_in_top_band = taxable_income - previous_band_limit
+        tax_for_top_band = round(taxable_in_top_band * top_rate, 2)
         total_tax += tax_for_top_band
-        tax_breakdown[f"Above £{previous_band_limit:,}"] = f"£{taxable_in_top_band:,.2f} @ {int(top_rate*100)}% = £{tax_for_top_band:,.2f}"
+        tax_breakdown[f"Above £{previous_band_limit + effective_personal_allowance:,}"] = f"£{taxable_in_top_band:,.2f} @ {int(top_rate*100)}% = £{tax_for_top_band:,.2f}"
         
     return total_tax, tax_breakdown
 
@@ -104,14 +92,14 @@ if st.button("Calculate Tax"):
         st.header(f"Tax Calculation Summary for {tax_year}")
         st.write(f"**Annual Salary:** £{salary:,.2f}")
 
-        personal_allowance = selected_tax_data["personal_allowance"]
+        effective_personal_allowance = selected_tax_data["personal_allowance"]
         if salary > selected_tax_data["allowance_threshold"] and salary <= 125140:
-            personal_allowance = personal_allowance - ((salary - selected_tax_data["allowance_threshold"]) / 2)
+            effective_personal_allowance = effective_personal_allowance - ((salary - selected_tax_data["allowance_threshold"]) / 2)
         elif salary > 125140:
-            personal_allowance = 0
+            effective_personal_allowance = 0
 
-        st.write(f"**Personal Allowance:** £{personal_allowance:,.2f}")
-        st.write(f"**Taxable Income:** £{salary - personal_allowance:,.2f}")
+        st.write(f"**Personal Allowance:** £{effective_personal_allowance:,.2f}")
+        st.write(f"**Taxable Income:** £{max(0, salary - effective_personal_allowance):,.2f}")
         
         st.subheader("Breakdown by Tax Band")
         if breakdown:
