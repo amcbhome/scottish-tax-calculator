@@ -17,18 +17,7 @@ tax_data = {
     }
     # Add new tax years here as they are announced
     # Example:
-    # "2026-2027": {
-    #     "personal_allowance": 12570,
-    #     "allowance_threshold": 100000,
-    #     "tax_bands": [
-    #         (15500, 0.19),
-    #         (28000, 0.20),
-    #         (45000, 0.21),
-    #         (78000, 0.43),
-    #         (125140, 0.46)
-    #     ],
-    #     "top_rate": 0.49,
-    # }
+    # "2026-2027": { ... }
 }
 
 def calculate_scottish_tax(salary, tax_year_data):
@@ -58,12 +47,26 @@ def calculate_scottish_tax(salary, tax_year_data):
     total_tax = 0.0
     tax_breakdown = {}
     
-    previous_band_limit = 0
+    # Correctly initialize the previous band limit to the personal allowance
+    previous_band_limit = personal_allowance
     
-    # Calculate tax for each band
-    for band_limit, rate in tax_bands:
-        if taxable_income > previous_band_limit:
-            taxable_in_band = min(taxable_income, band_limit) - previous_band_limit
+    # The first band's lower limit is the personal allowance
+    first_tax_band_limit = tax_bands[0][0]
+    first_tax_rate = tax_bands[0][1]
+    
+    if taxable_income > 0:
+        taxable_in_first_band = min(taxable_income, first_tax_band_limit - personal_allowance)
+        tax_for_first_band = taxable_in_first_band * first_tax_rate
+        total_tax += tax_for_first_band
+        tax_breakdown[f"£{personal_allowance + 1:,} - £{first_tax_band_limit:,}"] = f"£{taxable_in_first_band:,.2f} @ {int(first_tax_rate*100)}% = £{tax_for_first_band:,.2f}"
+
+    # Calculate tax for the remaining bands
+    previous_band_limit = first_tax_band_limit
+    
+    for band_limit, rate in tax_bands[1:]:
+        if taxable_income > previous_band_limit - personal_allowance:
+            # The amount of income in the current band
+            taxable_in_band = min(taxable_income, band_limit - personal_allowance) - (previous_band_limit - personal_allowance)
             tax_for_band = taxable_in_band * rate
             total_tax += tax_for_band
             tax_breakdown[f"£{previous_band_limit+1:,} - £{band_limit:,}"] = f"£{taxable_in_band:,.2f} @ {int(rate*100)}% = £{tax_for_band:,.2f}"
@@ -72,8 +75,8 @@ def calculate_scottish_tax(salary, tax_year_data):
             break
 
     # Calculate tax for the top rate band
-    if taxable_income > previous_band_limit:
-        taxable_in_top_band = taxable_income - previous_band_limit
+    if taxable_income > previous_band_limit - personal_allowance:
+        taxable_in_top_band = taxable_income - (previous_band_limit - personal_allowance)
         tax_for_top_band = taxable_in_top_band * top_rate
         total_tax += tax_for_top_band
         tax_breakdown[f"Above £{previous_band_limit:,}"] = f"£{taxable_in_top_band:,.2f} @ {int(top_rate*100)}% = £{tax_for_top_band:,.2f}"
@@ -111,8 +114,11 @@ if st.button("Calculate Tax"):
         st.write(f"**Taxable Income:** £{salary - personal_allowance:,.2f}")
         
         st.subheader("Breakdown by Tax Band")
-        for band, details in breakdown.items():
-            st.write(f"**Band {band}:** {details}")
+        if breakdown:
+            for band, details in breakdown.items():
+                st.write(f"**Band {band}:** {details}")
+        else:
+            st.write("No tax due.")
 
         st.markdown("---")
         st.success(f"**Total Scottish Income Tax due:** £{total_tax_due:,.2f}")
