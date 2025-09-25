@@ -1,35 +1,59 @@
 import streamlit as st
 
-def calculate_scottish_tax(salary):
+# A dictionary to store tax rates and bands for different tax years.
+# This makes it easy to update for new tax years.
+tax_data = {
+    "2025-2026": {
+        "personal_allowance": 12570,
+        "allowance_threshold": 100000,
+        "tax_bands": [
+            (15397, 0.19),  # Starter rate: £12,571 - £15,397
+            (27491, 0.20),  # Basic rate: £15,398 - £27,491
+            (43662, 0.21),  # Intermediate rate: £27,492 - £43,662
+            (75000, 0.42),  # Higher rate: £43,663 - £75,000
+            (125140, 0.45) # Advanced rate: £75,001 - £125,140
+        ],
+        "top_rate": 0.48,
+    }
+    # Add new tax years here as they are announced
+    # Example:
+    # "2026-2027": {
+    #     "personal_allowance": 12570,
+    #     "allowance_threshold": 100000,
+    #     "tax_bands": [
+    #         (15500, 0.19),
+    #         (28000, 0.20),
+    #         (45000, 0.21),
+    #         (78000, 0.43),
+    #         (125140, 0.46)
+    #     ],
+    #     "top_rate": 0.49,
+    # }
+}
+
+def calculate_scottish_tax(salary, tax_year_data):
     """
-    Calculates the Scottish income tax for the 2025-2026 tax year.
+    Calculates the Scottish income tax for a specified tax year.
 
     Args:
         salary (float): The annual gross salary.
+        tax_year_data (dict): A dictionary containing the tax rates and bands for a specific year.
 
     Returns:
         tuple: A tuple containing the total tax due and a dictionary
                with the tax breakdown by band.
     """
-    
-    # Define the tax bands and rates for 2025-2026
-    tax_bands = [
-        (15397, 0.19),  # Starter rate: £12,571 - £15,397
-        (27491, 0.20),  # Basic rate: £15,398 - £27,491
-        (43662, 0.21),  # Intermediate rate: £27,492 - £43,662
-        (75000, 0.42),  # Higher rate: £43,663 - £75,000
-        (125140, 0.45) # Advanced rate: £75,001 - £125,140
-    ]
-    top_rate = 0.48 # Top rate: Above £125,140
+    personal_allowance = tax_year_data["personal_allowance"]
+    allowance_threshold = tax_year_data["allowance_threshold"]
+    tax_bands = tax_year_data["tax_bands"]
+    top_rate = tax_year_data["top_rate"]
 
-    # Calculate the personal allowance. It's reduced by £1 for every £2 over £100,000
+    # Calculate the personal allowance.
     if salary > 125140:
         personal_allowance = 0
-    elif salary > 100000:
-        personal_allowance = 12570 - ((salary - 100000) / 2)
-    else:
-        personal_allowance = 12570
-
+    elif salary > allowance_threshold:
+        personal_allowance = personal_allowance - ((salary - allowance_threshold) / 2)
+    
     taxable_income = salary - personal_allowance
     total_tax = 0.0
     tax_breakdown = {}
@@ -39,7 +63,6 @@ def calculate_scottish_tax(salary):
     # Calculate tax for each band
     for band_limit, rate in tax_bands:
         if taxable_income > previous_band_limit:
-            # The amount of income in the current band
             taxable_in_band = min(taxable_income, band_limit) - previous_band_limit
             tax_for_band = taxable_in_band * rate
             total_tax += tax_for_band
@@ -58,8 +81,11 @@ def calculate_scottish_tax(salary):
     return total_tax, tax_breakdown
 
 # Streamlit App
-st.title("Scottish Income Tax Calculator (2025-2026)")
-st.write("Enter your annual salary to calculate your estimated Scottish income tax.")
+st.title("Scottish Income Tax Calculator")
+st.write("Calculate your estimated Scottish income tax for various tax years.")
+
+# User selects the tax year
+tax_year = st.selectbox("Select Tax Year", list(tax_data.keys()))
 
 # Get salary input from the user
 salary = st.number_input("Annual Salary (£)", min_value=0.0, step=1000.0)
@@ -69,16 +95,15 @@ if st.button("Calculate Tax"):
     if salary == 0:
         st.warning("Please enter a salary to calculate the tax.")
     else:
-        total_tax_due, breakdown = calculate_scottish_tax(salary)
+        selected_tax_data = tax_data[tax_year]
+        total_tax_due, breakdown = calculate_scottish_tax(salary, selected_tax_data)
         
-        # Display the results
-        st.header("Tax Calculation Summary")
+        st.header(f"Tax Calculation Summary for {tax_year}")
         st.write(f"**Annual Salary:** £{salary:,.2f}")
 
-        # Personal Allowance Calculation based on salary
-        personal_allowance = 12570
-        if salary > 100000 and salary <= 125140:
-            personal_allowance = 12570 - ((salary - 100000) / 2)
+        personal_allowance = selected_tax_data["personal_allowance"]
+        if salary > selected_tax_data["allowance_threshold"] and salary <= 125140:
+            personal_allowance = personal_allowance - ((salary - selected_tax_data["allowance_threshold"]) / 2)
         elif salary > 125140:
             personal_allowance = 0
 
